@@ -34,7 +34,7 @@ def _get_dataset_filename(dataset_dir, split_name, shard_id, _NUM_SHARDS):
 def _dataset_exists(dataset_dir, _NUM_SHARDS):
     for split_name in ['train', 'test']:
         for shard_id in range(_NUM_SHARDS):
-            output_filename = _get_dataset_filename(dataset_dir, split_name, shard_id)
+            output_filename = _get_dataset_filename(dataset_dir, split_name, shard_id, _NUM_SHARDS)
             if not tf.gfile.Exists(output_filename):
                 return False
     return True
@@ -75,22 +75,24 @@ def _convert_dataset(split_name, filename, class_names_to_ids, dataset_dir, _NUM
         image_reader = ImageReader()
         with tf.Session('') as sess:
             for shard_id in range(_NUM_SHARDS):
-                output_filename = _get_dataset_filename(dataset_dir, split_name, shard_id)
+                output_filename = _get_dataset_filename(dataset_dir, split_name, shard_id, _NUM_SHARDS)
                 with tf.python_io.TFRecordWriter(output_filename) as tfrecord_writer:
                     start_ndx = shard_id * num_per_shard
                     end_ndx = min((shard_id + 1) * num_per_shard, len(filename))
                     for i in range(start_ndx, end_ndx):
                         sys.stdout.write('\r>> Converting image %d/%d shard %d' % (i + 1, len(filename), shard_id))
                         sys.stdout.flush()
+                        try:
+                            image_data = tf.gfile.FastGFile(filename[i], 'rb').read()
+                            height, width = image_reader.read_image_dims(sess, image_data)
 
-                        image_data = tf.gfile.FastGFile(filename[i], 'rb').read()
-                        height, width = image_reader.read_image_dims(sess, image_data)
+                            class_name = os.path.basename(os.path.dirname(filename[i]))
+                            class_id = class_names_to_ids[class_name]
 
-                        class_name = os.path.basename(os.path.dirname(filename[i]))
-                        class_id = class_names_to_ids[class_name]
-
-                        example = dataset_utils.image_to_tfexample(image_data, b'jpg', height, width, class_id)
-                        tfrecord_writer.write(example.SerializeToString())
+                            example = dataset_utils.image_to_tfexample(image_data, b'jpg', height, width, class_id)
+                            tfrecord_writer.write(example.SerializeToString())
+                        except Exception as e:
+                            print(e)
 
 
 def run(dataset_dir):
@@ -113,11 +115,11 @@ def run(dataset_dir):
     labels_to_class_names = dict(zip(range(len(class_names)), class_names))
     dataset_utils.write_label_file(labels_to_class_names, dataset_dir)
 
-    _clean_up_temporary_files(dataset_dir)
+    # _clean_up_temporary_files(dataset_dir)
     print('\n Finished converting the mydata dataset')
 
 
 if __name__ == '__main__':
     _RATIO_VALIDATION = 0.05
-    dataset_dir = ''
+    dataset_dir = '/home/vip/qyr/data/car_color_data/train_half_car/'
     run(dataset_dir)
