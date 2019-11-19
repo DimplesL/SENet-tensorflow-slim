@@ -26,12 +26,12 @@ class ImageReader(object):
         return image
 
 
-def _get_dataset_filename(dataset_dir, split_name, shard_id):
+def _get_dataset_filename(dataset_dir, split_name, shard_id, _NUM_SHARDS):
     output_filename = 'mydata_%s_%05d-of-%05d.tfrecord' % (split_name, shard_id, _NUM_SHARDS)
     return os.path.join(dataset_dir, output_filename)
 
 
-def _dataset_exists(dataset_dir):
+def _dataset_exists(dataset_dir, _NUM_SHARDS):
     for split_name in ['train', 'test']:
         for shard_id in range(_NUM_SHARDS):
             output_filename = _get_dataset_filename(dataset_dir, split_name, shard_id)
@@ -56,7 +56,7 @@ def _get_filenames_and_classes(dataset_dir):
             path = os.path.join(directory, filename)
             photo_filenames.append(path)
 
-    return photo_filenames, sorted(class_names)
+    return photo_filenames, sorted(class_names), _NUM_SHARDS
 
 
 def _clean_up_temporary_files(dataset_dir):
@@ -66,7 +66,7 @@ def _clean_up_temporary_files(dataset_dir):
             tf.gfile.DeleteRecursively(path)
 
 
-def _convert_dataset(split_name, filename, class_names_to_ids, dataset_dir):
+def _convert_dataset(split_name, filename, class_names_to_ids, dataset_dir, _NUM_SHARDS):
     assert split_name in ['train', 'validation']
 
     num_per_shard = int(math.ceil(len(filename) / float(_NUM_SHARDS)))
@@ -97,11 +97,7 @@ def run(dataset_dir):
     if not tf.gfile.Exists(dataset_dir):
         tf.gfile.MakeDirs(dataset_dir)
 
-    if _dataset_exists(dataset_dir):
-        print('Dataset files already exist. Exiting without re-creating them.')
-        return
-
-    photo_filenames, class_names = _get_filenames_and_classes(dataset_dir)
+    photo_filenames, class_names, _NUM_SHARDS = _get_filenames_and_classes(dataset_dir)
     class_names_to_ids = dict(zip(class_names, range(len(class_names))))
 
     random.seed(_RANDOM_SEED)
@@ -111,8 +107,8 @@ def run(dataset_dir):
     training_filenames = photo_filenames[_NUM_VAL:]
     validation_filenames = photo_filenames[:_NUM_VAL]
 
-    _convert_dataset('train', training_filenames, class_names_to_ids, dataset_dir)
-    _convert_dataset('validation', validation_filenames, class_names_to_ids, dataset_dir)
+    _convert_dataset('train', training_filenames, class_names_to_ids, dataset_dir, _NUM_SHARDS)
+    _convert_dataset('validation', validation_filenames, class_names_to_ids, dataset_dir, _NUM_SHARDS)
 
     labels_to_class_names = dict(zip(range(len(class_names)), class_names))
     dataset_utils.write_label_file(labels_to_class_names, dataset_dir)
