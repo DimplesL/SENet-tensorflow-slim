@@ -123,7 +123,7 @@ def main(dataset_dir, _RATIO_VALIDATION):
 def get_arguments():
     parser_online = argparse.ArgumentParser()
     parser_online.add_argument('-i', '--path_input', type=str, help='origin data directory',
-                               default="'/home/vip/qyr/data/car_color_data/train_new_crop/'")
+                               default='/home/vip/qyr/data/car_color_data/train_new_crop/')
     parser_online.add_argument('-e', '--eval_num', type=float, help='number of data to eval', default=0.1)
 
     return parser_online.parse_args()
