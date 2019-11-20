@@ -3,6 +3,7 @@ import os
 import random
 import math
 import sys
+import argparse
 
 _RANDOM_SEED = 0
 
@@ -32,7 +33,7 @@ def _get_dataset_filename(dataset_dir, split_name, shard_id, _NUM_SHARDS):
 
 
 def _dataset_exists(dataset_dir, _NUM_SHARDS):
-    for split_name in ['train', 'test']:
+    for split_name in ['train', 'validation']:
         for shard_id in range(_NUM_SHARDS):
             output_filename = _get_dataset_filename(dataset_dir, split_name, shard_id, _NUM_SHARDS)
             if not tf.gfile.Exists(output_filename):
@@ -95,7 +96,7 @@ def _convert_dataset(split_name, filename, class_names_to_ids, dataset_dir, _NUM
                             print(e)
 
 
-def run(dataset_dir):
+def main(dataset_dir, _RATIO_VALIDATION):
     if not tf.gfile.Exists(dataset_dir):
         tf.gfile.MakeDirs(dataset_dir)
 
@@ -119,7 +120,17 @@ def run(dataset_dir):
     print('\n Finished converting the mydata dataset')
 
 
+def get_arguments():
+    parser_online = argparse.ArgumentParser()
+    parser_online.add_argument('-i', '--path_input', type=str, help='origin data directory',
+                               default="'/home/vip/qyr/data/car_color_data/train_new_crop/'")
+    parser_online.add_argument('-e', '--eval_num', type=float, help='number of data to eval', default=0.1)
+
+    return parser_online.parse_args()
+
+
 if __name__ == '__main__':
-    _RATIO_VALIDATION = 0.05
-    dataset_dir = '/home/vip/qyr/data/car_color_data/train_half_car/'
-    run(dataset_dir)
+    args = get_arguments()
+    _RATIO_VALIDATION = args.eval_num
+    dataset_dir = args.path_input
+    main(dataset_dir, _RATIO_VALIDATION)

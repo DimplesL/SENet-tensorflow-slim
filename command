@@ -49,11 +49,6 @@ CUDA_VISIBLE_DEVICES=0 python eval_image_classifier.py \
     --model_name=resnet_v1_50
 
 INFO:tensorflow:Restoring parameters from /home/vip/qyr/data/car_color_data/slim_train_ft/model.ckpt-89992
-INFO:tensorflow:Running local_init_op.
-INFO:tensorflow:Done running local_init_op.
-WARNING:tensorflow:From /home/vip/miniconda3/envs/py3/lib/python3.6/site-packages/tensorflow/python/training/monitored_session.py:804: start_queue_runners (from tensorflow.python.training.queue_runner_impl) is deprecated and will be removed in a future version.
-Instructions for updating:
-To construct input pipelines, use the `tf.data` module.
 INFO:tensorflow:Evaluation [1/6]
 INFO:tensorflow:Evaluation [2/6]
 INFO:tensorflow:Evaluation [3/6]
@@ -63,3 +58,24 @@ INFO:tensorflow:Evaluation [6/6]
 eval/Accuracy[0.818333328]
 eval/Recall_5[0.99333334]
 INFO:tensorflow:Finished evaluation at 2019-11-19-11:24:24
+
+
+
+python export_inference_graph.py \
+  --alsologtostderr \
+  --input_checkpoint=/Users/qiuyurui/Desktop/car_color/model.ckpt-89992 \
+  --model_name=resnet_v1_50 \
+  --num_classes=12 \
+  --scope=resnet_v1_50 \
+  --output_file=./inception_v3_inf_graph.pb
+
+CUDA_VISIBLE_DEVICES=0 python eval_image_classifier.py \
+    --alsologtostderr \
+    --checkpoint_path=/home/vip/qyr/data/car_color_data/slim_mobilenet_v1 \
+    --dataset_dir=/home/vip/qyr/data/car_color_data/train_half_car \
+    --dataset_name=mydata \
+    --dataset_split_name=validation \
+    --model_name=mobilenet_v1
+
+
+/home/vip/qyr/data/car_color_data/train_new_crop

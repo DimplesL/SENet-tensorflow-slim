@@ -1,34 +1,61 @@
-# Copyright 2016 The TensorFlow Authors. All Rights Reserved.
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-# http://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
-# ==============================================================================
-"""Contains a factory for building various models."""
-
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-
-from preprocessing import cifarnet_preprocessing
-from preprocessing import inception_preprocessing
-from preprocessing import lenet_preprocessing
-from preprocessing import vgg_preprocessing
-
-slim = tf.contrib.slim
+import numpy as np
 
 
-def get_preprocessing(name, is_training=False):
+def inception_preprocessing(_image, crop_height, crop_width):
+    _image = _image.astype(np.float32)
+    _image_crop = _central_crop(_image, crop_height, crop_width)
+    _image_crop = np.multiply(_image_crop, 1.0 / 255)
+    _image_crop = np.subtract(_image_crop, 0.5)
+    _image_crop = np.multiply(_image_crop, 2.0)
+    return _image_crop
+
+
+def lenet_preprocessing(_image, crop_height, crop_width):
+    _image = _image.astype(np.float32)
+    _image_crop = _central_crop(_image, crop_height, crop_width)
+    _image_crop = np.subtract(_image_crop, 128.0)
+    _image_crop = np.divide(_image_crop, 128.0)
+    return _image_crop
+
+
+def vgg_preprocessing(_image, crop_height, crop_width):
+    _R_MEAN = 123.68
+    _G_MEAN = 116.78
+    _B_MEAN = 103.94
+    if _image.shape[-1] != 3:
+        raise ValueError('Input must be of size [height, width, C>0]')
+    _image = _image.astype(np.float32)
+    _image_crop = _central_crop(_image, crop_height, crop_width)
+    means = [_R_MEAN, _G_MEAN, _B_MEAN]
+    return np.subtract(_image_crop, means)
+
+
+def _central_crop(image, crop_height, crop_width):
+    """Performs central crops of the given image list.
+
+    Args:
+      image: the input image
+      crop_height: the height of the image following the crop.
+      crop_width: the width of the image following the crop.
+
+    Returns:
+      the cropped images.
+    """
+
+    image_height = image.shape[0]
+    image_width = image.shape[1]
+
+    offset_height = int((image_height - crop_height) / 2.0)
+    offset_width = int((image_width - crop_width) / 2.0)
+
+    return image[offset_height:crop_height + offset_height, offset_width:crop_width + offset_width, :]
+
+
+def get_preprocessing(name):
     """Returns preprocessing_fn(image, height, width, **kwargs).
 
     Args:
@@ -45,7 +72,6 @@ def get_preprocessing(name, is_training=False):
       ValueError: If Preprocessing `name` is not recognized.
     """
     preprocessing_fn_map = {
-        'cifarnet': cifarnet_preprocessing,
         'inception': inception_preprocessing,
         'inception_v1': inception_preprocessing,
         'inception_v2': inception_preprocessing,
@@ -74,8 +100,4 @@ def get_preprocessing(name, is_training=False):
     if name not in preprocessing_fn_map:
         raise ValueError('Preprocessing name [%s] was not recognized' % name)
 
-    def preprocessing_fn(image, output_height, output_width, **kwargs):
-        return preprocessing_fn_map[name].preprocess_image(
-            image, output_height, output_width, is_training=is_training, **kwargs)
-
-    return preprocessing_fn
+    return preprocessing_fn_map[name]

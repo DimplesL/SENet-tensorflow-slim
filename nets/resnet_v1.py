@@ -57,12 +57,12 @@ from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-
+import tensorflow.contrib.slim as slim
 from nets import resnet_utils
 from nets.attention_module import se_block, cbam_block, channel_attention, spatial_attention
 
 resnet_arg_scope = resnet_utils.resnet_arg_scope
-slim = tf.contrib.slim
+# slim = tf.contrib.slim
 
 
 class NoOpScope(object):

@@ -1,10 +1,10 @@
-# Copyright 2017 The TensorFlow Authors. All Rights Reserved.
+# Copyright 2015 The TensorFlow Authors. All Rights Reserved.
 #
 # Licensed under the Apache License, Version 2.0 (the "License");
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
-# http://www.apache.org/licenses/LICENSE-2.0
+#     http://www.apache.org/licenses/LICENSE-2.0
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -12,52 +12,35 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # ==============================================================================
-r"""Saves out a GraphDef containing the architecture of the model.
-To use it, run something like this, with a model name defined by slim:
-bazel build tensorflow_models/research/slim:export_inference_graph
-bazel-bin/tensorflow_models/research/slim/export_inference_graph \
---model_name=inception_v3 --output_file=/tmp/inception_v3_inf_graph.pb
-If you then want to use the resulting model with your own or pretrained
-checkpoints as part of a mobile model, you can run freeze_graph to get a graph
-def with the variables inlined as constants using:
-bazel build tensorflow/python/tools:freeze_graph
-bazel-bin/tensorflow/python/tools/freeze_graph \
---input_graph=/tmp/inception_v3_inf_graph.pb \
---input_checkpoint=/tmp/checkpoints/inception_v3.ckpt \
---input_binary=true --output_graph=/tmp/frozen_inception_v3.pb \
---output_node_names=InceptionV3/Predictions/Reshape_1
-The output node names will vary depending on the model, but you can inspect and
-estimate them using the summarize_graph tool:
-bazel build tensorflow/tools/graph_transforms:summarize_graph
-bazel-bin/tensorflow/tools/graph_transforms/summarize_graph \
---in_graph=/tmp/inception_v3_inf_graph.pb
-To run the resulting graph in C++, you can look at the label_image sample code:
-bazel build tensorflow/examples/label_image:label_image
-bazel-bin/tensorflow/examples/label_image/label_image \
---image=${HOME}/Pictures/flowers.jpg \
---input_layer=input \
---output_layer=InceptionV3/Predictions/Reshape_1 \
---graph=/tmp/frozen_inception_v3.pb \
---labels=/tmp/imagenet_slim_labels.txt \
---input_mean=0 \
---input_std=255
-"""
+r"""Converts checkpoint variables into Const ops in a standalone GraphDef file.
 
+This script is designed to take a GraphDef proto, a SaverDef proto, and a set of
+variable values stored in a checkpoint file, and output a GraphDef with all of
+the variable ops converted into const ops containing the values of the
+variables.
+
+It's useful to do this when we need to load a single file in C++, especially in
+environments like mobile or embedded where we may not have access to the
+RestoreTensor ops and file loading calls that they rely on.
+
+An example of command-line usage is:
+bazel build tensorflow/python/tools:freeze_graph && \
+bazel-bin/tensorflow/python/tools/freeze_graph \
+--input_graph=some_graph_def.pb \
+--input_checkpoint=model.ckpt-8361242 \
+--output_graph=/tmp/frozen_graph.pb --output_node_names=softmax
+
+You can also look at freeze_graph_test.py for an example of how to use it.
+
+"""
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-import tensorflow as tf
-
-from tensorflow.python.framework import graph_util
-
-from tensorflow.python.platform import gfile
-from datasets import dataset_factory
-from nets import nets_factory
 import argparse
 import re
 import sys
-import os
+
 from google.protobuf import text_format
 
 from tensorflow.core.framework import graph_pb2
@@ -74,45 +57,6 @@ from tensorflow.python.saved_model import tag_constants
 from tensorflow.python.tools import saved_model_utils
 from tensorflow.python.training import checkpoint_management
 from tensorflow.python.training import saver as saver_lib
-
-slim = tf.contrib.slim
-
-tf.app.flags.DEFINE_boolean(
-    'is_training', False,
-    'Whether to save out a training-focused version of the model.')
-
-tf.app.flags.DEFINE_integer(
-    'image_size', None,
-    'The image size to use, otherwise use the model default_image_size.')
-
-tf.app.flags.DEFINE_integer(
-    'batch_size', None,
-    'Batch size for the exported model. Defaulted to "None" so batch size can '
-    'be specified at model runtime.')
-
-tf.app.flags.DEFINE_string('dataset_name', 'mydata',
-                           'The name of the dataset to use with the model.')
-
-tf.app.flags.DEFINE_string(
-    'dataset_dir', '', 'Directory to save intermediate dataset files to')
-
-tf.app.flags.DEFINE_string('input_checkpoint', '/Users/qiuyurui/Desktop/car_color/model.ckpt-89992',
-                           'Path to trained checkpoint, typically of the form path/to/model.ckpt')
-
-tf.app.flags.DEFINE_string(
-    'model_name', 'resnet_v1_50', 'The name of the architecture to save.')
-
-tf.app.flags.DEFINE_integer(
-    'num_classes', 0,
-    'the number of the classes to predict')
-
-tf.app.flags.DEFINE_string(
-    'output_file', '/Users/qiuyurui/Desktop/car_color/resnet_50_slim.pb', 'Where to save the resulting file to.')
-
-tf.app.flags.DEFINE_string(
-    'scope', 'resnet_v1_50', 'the scope name of the pb model')
-
-FLAGS = tf.app.flags.FLAGS
 
 
 def _has_no_variables(sess):
@@ -419,42 +363,131 @@ def freeze_graph(input_graph,
         checkpoint_version=checkpoint_version)
 
 
-def main(_):
-    if not FLAGS.output_file:
-        raise ValueError('You must supply the path to save to with --output_file')
-    tf.logging.set_verbosity(tf.logging.INFO)
-    pb_file_path = './pb_structure'
-    middle_pb = "./{}/{}.pb".format(pb_file_path, FLAGS.model_name)
-    if os.path.exists(pb_file_path):
-        os.mkdir(pb_file_path)
-    with tf.Graph().as_default() as graph:
-        with tf.Session() as sess:
-            # dataset = dataset_factory.get_dataset(FLAGS.dataset_name, 'train',
-            #                                       FLAGS.dataset_dir)
-            network_fn = nets_factory.get_network_fn(
-                FLAGS.model_name,
-                num_classes=FLAGS.num_classes,  # (dataset.num_classes - FLAGS.labels_offset),
-                is_training=FLAGS.is_training)
-            image_size = FLAGS.image_size or network_fn.default_image_size
-            placeholder = tf.placeholder(name='input', dtype=tf.float32,
-                                         shape=[FLAGS.batch_size, image_size,
-                                                image_size, 3])
-            net, end_points = network_fn(placeholder)
+def main(unused_args, flags):
+    if flags.checkpoint_version == 1:
+        checkpoint_version = saver_pb2.SaverDef.V1
+    elif flags.checkpoint_version == 2:
+        checkpoint_version = saver_pb2.SaverDef.V2
+    else:
+        print("Invalid checkpoint version (must be '1' or '2'): %d" %
+              flags.checkpoint_version)
+        return -1
+    freeze_graph(flags.input_graph, flags.input_saver, flags.input_binary,
+                 flags.input_checkpoint, flags.output_node_names,
+                 flags.restore_op_name, flags.filename_tensor_name,
+                 flags.output_graph, flags.clear_devices, flags.initializer_nodes,
+                 flags.variable_names_whitelist, flags.variable_names_blacklist,
+                 flags.input_meta_graph, flags.input_saved_model_dir,
+                 flags.saved_model_tags, checkpoint_version)
 
-            names = list(end_points.keys())
-            print(names)
 
-            graph_def = graph.as_graph_def()
-            with gfile.GFile(middle_pb, 'wb') as f:
-                f.write(graph_def.SerializeToString())
+def run_main():
+    parser = argparse.ArgumentParser()
+    parser.register("type", "bool", lambda v: v.lower() == "true")
+    parser.add_argument(
+        "--input_graph",
+        type=str,
+        default="",
+        help="TensorFlow \'GraphDef\' file to load.")
+    parser.add_argument(
+        "--input_saver",
+        type=str,
+        default="",
+        help="TensorFlow saver file to load.")
+    parser.add_argument(
+        "--input_checkpoint",
+        type=str,
+        default="",
+        help="TensorFlow variables file to load.")
+    parser.add_argument(
+        "--checkpoint_version",
+        type=int,
+        default=2,
+        help="Tensorflow variable file format")
+    parser.add_argument(
+        "--output_graph",
+        type=str,
+        default="",
+        help="Output \'GraphDef\' file name.")
+    parser.add_argument(
+        "--input_binary",
+        nargs="?",
+        const=True,
+        type="bool",
+        default=False,
+        help="Whether the input files are in binary format.")
+    parser.add_argument(
+        "--output_node_names",
+        type=str,
+        default="",
+        help="The name of the output nodes, comma separated.")
+    parser.add_argument(
+        "--restore_op_name",
+        type=str,
+        default="save/restore_all",
+        help="""\
+      The name of the master restore operator. Deprecated, unused by updated \
+      loading code.
+      """)
+    parser.add_argument(
+        "--filename_tensor_name",
+        type=str,
+        default="save/Const:0",
+        help="""\
+      The name of the tensor holding the save path. Deprecated, unused by \
+      updated loading code.
+      """)
+    parser.add_argument(
+        "--clear_devices",
+        nargs="?",
+        const=True,
+        type="bool",
+        default=True,
+        help="Whether to remove device specifications.")
+    parser.add_argument(
+        "--initializer_nodes",
+        type=str,
+        default="",
+        help="Comma separated list of initializer nodes to run before freezing.")
+    parser.add_argument(
+        "--variable_names_whitelist",
+        type=str,
+        default="",
+        help="""\
+      Comma separated list of variables to convert to constants. If specified, \
+      only those variables will be converted to constants.\
+      """)
+    parser.add_argument(
+        "--variable_names_blacklist",
+        type=str,
+        default="",
+        help="""\
+      Comma separated list of variables to skip converting to constants.\
+      """)
+    parser.add_argument(
+        "--input_meta_graph",
+        type=str,
+        default="",
+        help="TensorFlow \'MetaGraphDef\' file to load.")
+    parser.add_argument(
+        "--input_saved_model_dir",
+        type=str,
+        default="",
+        help="Path to the dir with TensorFlow \'SavedModel\' file and variables.")
+    parser.add_argument(
+        "--saved_model_tags",
+        type=str,
+        default="serve",
+        help="""\
+      Group of tag(s) of the MetaGraphDef to load, in string format,\
+      separated by \',\'. For tag-set contains multiple tags, all tags \
+      must be passed in.\
+      """)
+    flags, unparsed = parser.parse_known_args()
 
-    output_node_names = '{}/{}/Softmax'.format(FLAGS.scope, names[-1])
-    freeze_graph(middle_pb, "", True,
-                 FLAGS.input_checkpoint, output_node_names,
-                 "save/restore_all", "save/Const:0",
-                 FLAGS.output_file, True, ""
-                 )
+    my_main = lambda unused_args: main(unused_args, flags)
+    app.run(main=my_main, argv=[sys.argv[0]] + unparsed)
 
 
 if __name__ == '__main__':
-    tf.app.run()
+    run_main()
