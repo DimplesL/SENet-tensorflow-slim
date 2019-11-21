@@ -96,18 +96,18 @@ tf.app.flags.DEFINE_string('dataset_name', 'mydata',
 tf.app.flags.DEFINE_string(
     'dataset_dir', '', 'Directory to save intermediate dataset files to')
 
-tf.app.flags.DEFINE_string('input_checkpoint', '/Users/qiuyurui/Desktop/car_color/model.ckpt-89992',
+tf.app.flags.DEFINE_string('input_checkpoint', '/Users/qiuyurui/Desktop/car_color/model_slim/model.ckpt-110887',
                            'Path to trained checkpoint, typically of the form path/to/model.ckpt')
 
 tf.app.flags.DEFINE_string(
     'model_name', 'resnet_v1_50', 'The name of the architecture to save.')
 
 tf.app.flags.DEFINE_integer(
-    'num_classes', 0,
+    'num_classes', 12,
     'the number of the classes to predict')
 
 tf.app.flags.DEFINE_string(
-    'output_file', '/Users/qiuyurui/Desktop/car_color/resnet_50_slim.pb', 'Where to save the resulting file to.')
+    'output_file', '/Users/qiuyurui/Desktop/car_color/resnet_50_slim_car.pb', 'Where to save the resulting file to.')
 
 tf.app.flags.DEFINE_string(
     'scope', 'resnet_v1_50', 'the scope name of the pb model')
@@ -423,9 +423,9 @@ def main(_):
     if not FLAGS.output_file:
         raise ValueError('You must supply the path to save to with --output_file')
     tf.logging.set_verbosity(tf.logging.INFO)
-    pb_file_path = './pb_structure'
+    pb_file_path = 'pb_structure'
     middle_pb = "./{}/{}.pb".format(pb_file_path, FLAGS.model_name)
-    if os.path.exists(pb_file_path):
+    if not os.path.exists(pb_file_path):
         os.mkdir(pb_file_path)
     with tf.Graph().as_default() as graph:
         with tf.Session() as sess:
@@ -442,13 +442,13 @@ def main(_):
             net, end_points = network_fn(placeholder)
 
             names = list(end_points.keys())
-            print(names)
+            print(names[-1])
 
             graph_def = graph.as_graph_def()
             with gfile.GFile(middle_pb, 'wb') as f:
                 f.write(graph_def.SerializeToString())
 
-    output_node_names = '{}/{}/Softmax'.format(FLAGS.scope, names[-1])
+    output_node_names = '{}/{}/Reshape_1'.format(FLAGS.scope, names[-1])
     freeze_graph(middle_pb, "", True,
                  FLAGS.input_checkpoint, output_node_names,
                  "save/restore_all", "save/Const:0",

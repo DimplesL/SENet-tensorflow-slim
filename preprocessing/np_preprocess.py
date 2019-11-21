@@ -4,6 +4,7 @@ from __future__ import print_function
 
 import numpy as np
 
+import cv2
 
 def inception_preprocessing(_image, crop_height, crop_width):
     _image = _image.astype(np.float32)
@@ -22,12 +23,16 @@ def lenet_preprocessing(_image, crop_height, crop_width):
     return _image_crop
 
 
-def vgg_preprocessing(_image, crop_height, crop_width):
+def vgg_preprocessing(_image_in, crop_height, crop_width):
+    _RESIZE_SIDE_MIN = 256
+    _RESIZE_SIDE_MAX = 512
     _R_MEAN = 123.68
     _G_MEAN = 116.78
     _B_MEAN = 103.94
-    if _image.shape[-1] != 3:
+    h, w = _image_in.shape[:2]
+    if _image_in.shape[-1] != 3:
         raise ValueError('Input must be of size [height, width, C>0]')
+    _image = cv2.resize(_image_in, (int(_RESIZE_SIDE_MIN * w * 1.0 / h), _RESIZE_SIDE_MIN))
     _image = _image.astype(np.float32)
     _image_crop = _central_crop(_image, crop_height, crop_width)
     means = [_R_MEAN, _G_MEAN, _B_MEAN]

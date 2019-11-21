@@ -5,6 +5,8 @@ import numpy as np
 import os
 from preprocessing import np_preprocess
 
+from PIL import Image
+
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 os.environ["DYLD_PRINT_LIBRARIES"] = "1"
 
@@ -28,7 +30,7 @@ class MultiClassPredict(object):
                 # self.input_image_tensor = self.sess.graph.get_tensor_by_name("images:0")
                 # self.output_tensor_name = self.sess.graph.get_tensor_by_name("InceptionV3/Predictions/Softmax:0")
                 self.input_image_tensor = self.sess.graph.get_tensor_by_name("input:0")
-                self.output_tensor_name = self.sess.graph.get_tensor_by_name("resnet_v1_50/predictions/Softmax:0")
+                self.output_tensor_name = self.sess.graph.get_tensor_by_name("resnet_v1_50/predictions/Reshape_1:0")
                 self.preprocess = np_preprocess.get_preprocessing(model_name)
                 self.score_thresh = thresh
                 # "final_result:0" shape=(?, 12)  "Placeholder:0" shape=(?, 224, 224, 3)
@@ -120,6 +122,7 @@ if __name__ == "__main__":
             # cv2.waitKey(0)
 
             img = cv2.imread(file)
+            img_2 = Image.open(file)
             img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
 
             car_box, car_score = car_detector.predict(img_rgb)

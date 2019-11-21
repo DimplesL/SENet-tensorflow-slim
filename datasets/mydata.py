@@ -8,7 +8,7 @@ import tensorflow.contrib.slim as slim
 def get_split(split_name, dataset_dir, file_pattern=None, reader=None):
     _NUM_CLASSES = len(glob.glob(dataset_dir + '/*/'))
     ALL_NUM = len(glob.glob(dataset_dir + '/*/*.jpg'))
-    NUM_VAL = int(ALL_NUM * 0.05)
+    NUM_VAL = int(ALL_NUM * 0.1)
     SPLITS_TO_SIZES = {'train': ALL_NUM - NUM_VAL, 'validation': NUM_VAL}
 
     _FILE_PATTERN = 'mydata_%s_*.tfrecord'
